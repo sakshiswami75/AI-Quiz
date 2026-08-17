@@ -13,11 +13,18 @@ router.get('/teams', adminController.teams);
 
 // GET    /api/admin/rankings
 router.get('/rankings', adminController.rankings);
+router.get('/results/combined', adminController.combinedResults);
 
 // POST   /api/admin/attempts/:id/force-submit
 router.post('/attempts/:id/force-submit', adminController.forceSubmit);
 
 // DELETE /api/admin/teams/:teamNumber/reset
 router.delete('/teams/:teamNumber/reset', adminController.resetAttempt);
+
+// Question management
+router.get('/questions', adminController.questions);
+router.post('/questions', adminController.createQuestion);
+router.put('/questions/:id', adminController.updateQuestion);
+router.delete('/questions/:id', adminController.deleteQuestion);
 
 module.exports = router;

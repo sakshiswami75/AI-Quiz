@@ -11,7 +11,6 @@ export default function PageShell({ children, footer = true }) {
         </Link>
         <nav className="flex items-center gap-2">
           <Link to="/team" className="btn-ghost text-sm">Participants</Link>
-          <Link to="/admin/login" className="btn-ghost text-sm">Admin</Link>
         </nav>
       </header>
 

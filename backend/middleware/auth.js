@@ -3,8 +3,8 @@ const jwt = require('jsonwebtoken');
 const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const TOKEN_TTL = '12h';
 
-function signTeam(teamNumber) {
-  return jwt.sign({ role: 'team', teamNumber }, SECRET, { expiresIn: TOKEN_TTL });
+function signTeam(teamNumber, participants = []) {
+  return jwt.sign({ role: 'team', teamNumber, participants }, SECRET, { expiresIn: TOKEN_TTL });
 }
 
 function signAdmin(username) {

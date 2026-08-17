@@ -4,7 +4,11 @@ const TeamContext = createContext(null);
 
 const TEAM_KEY = 'qc_team';
 const TOKEN_KEY = 'qc_team_token';
-const ATTEMPT_KEY = 'qc_attempt_id';
+const clearAttemptIds = () => {
+  Object.keys(localStorage)
+    .filter((key) => key === 'qc_attempt_id' || key.startsWith('qc_attempt_id_round_'))
+    .forEach((key) => localStorage.removeItem(key));
+};
 
 function readTeam() {
   try {
@@ -21,7 +25,7 @@ export function TeamProvider({ children }) {
     // An attempt ID is browser-wide, while a token belongs to one team. Never
     // carry an ID from a previous authentication into this new team session.
     // The quiz will safely create or resume this team's server-side attempt.
-    localStorage.removeItem(ATTEMPT_KEY);
+    clearAttemptIds();
     localStorage.setItem(TEAM_KEY, JSON.stringify(teamObj));
     localStorage.setItem(TOKEN_KEY, token);
     setTeam(teamObj);
@@ -30,7 +34,7 @@ export function TeamProvider({ children }) {
   const logoutTeam = useCallback(() => {
     localStorage.removeItem(TEAM_KEY);
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(ATTEMPT_KEY);
+    clearAttemptIds();
     setTeam(null);
   }, []);
 

@@ -14,7 +14,7 @@ export default function QuestionCard({ question, total, selected, onSelect, lock
 
       {question.imageUrl && (
         <img
-          src={question.imageUrl}
+          src={`${import.meta.env.VITE_API_URL}${question.imageUrl}`}
           alt="Question visual"
           className="mt-5 max-h-80 w-full rounded-xl border border-slate-800 bg-slate-950 object-contain"
         />

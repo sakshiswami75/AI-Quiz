@@ -13,14 +13,40 @@ exports.start = async (req, res, next) => {
   try {
     const teamNumber = req.team.teamNumber;
     const round = Number(req.body.round) || 1;
+    if (![1, 2].includes(round)) {
+      return res.status(400).json({ message: 'Invalid round' });
+    }
 
     const team = await Team.findOne({ teamNumber });
     if (!team) return res.status(404).json({ message: 'Team not registered' });
+
+    const participants = Array.isArray(req.team.participants) ? req.team.participants : [];
+    if (participants.length !== 2 || participants.some((name) => !String(name || '').trim())) {
+      return res.status(403).json({ message: 'Participant verification is required' });
+    }
 
     let attempt = await Attempt.findOne({ team: team._id, round });
 
     if (attempt && attempt.status === 'submitted') {
       return res.status(409).json({ message: 'This round has already been submitted' });
+    }
+
+    if (attempt?.participants?.length) {
+      const normalized = (names) => names.map((name) => String(name).trim().replace(/\s+/g, ' ').toLocaleLowerCase()).sort();
+      if (JSON.stringify(normalized(attempt.participants)) !== JSON.stringify(normalized(participants))) {
+        return res.status(403).json({ message: 'Participant names do not match this attempt' });
+      }
+    }
+
+    if (round === 2) {
+      const round1 = await Attempt.findOne({ team: team._id, round: 1 });
+      const normalized = (names) => names.map((name) => String(name).trim().replace(/\s+/g, ' ').toLocaleLowerCase()).sort();
+      if (!round1 || !round1.participants?.length) {
+        return res.status(403).json({ message: 'Team has not started Round 1 yet.' });
+      }
+      if (JSON.stringify(normalized(round1.participants)) !== JSON.stringify(normalized(participants))) {
+        return res.status(403).json({ message: 'Participant names do not match the Round 1 team.' });
+      }
     }
 
     if (!attempt) {
@@ -31,6 +57,7 @@ exports.start = async (req, res, next) => {
           team: team._id,
           teamNumber,
           round,
+          participants,
           timeLimitSeconds: roundTimeLimit(round),
           answers: questions.map((q) => ({ question: q._id, selectedOption: '' })),
         });

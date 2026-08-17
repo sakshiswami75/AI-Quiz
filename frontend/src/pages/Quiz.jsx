@@ -9,11 +9,16 @@ import QuestionCard from '../components/QuestionCard';
 import QuestionPalette from '../components/QuestionPalette';
 import Spinner from '../components/Spinner';
 
-const ATTEMPT_KEY = 'qc_attempt_id';
+const violationMessage = 'Warning: Tab switching/fullscreen exit detected. If this happens again, your quiz will be submitted automatically.';
 
-export default function Quiz() {
+function violationStorageKey(id) {
+  return `qc_quiz_violations_${id}`;
+}
+
+export default function Quiz({ round = 1 }) {
   const { team } = useTeam();
   const navigate = useNavigate();
+  const attemptKey = `qc_attempt_id_round_${round}`;
 
   const [loading, setLoading] = useState(true);
   const [fatalError, setFatalError] = useState('');
@@ -28,7 +33,73 @@ export default function Quiz() {
 
   const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
   const [submitting, setSubmitting] = useState(false);
+  const [violationCount, setViolationCount] = useState(0);
+  const [violationWarning, setViolationWarning] = useState('');
   const submittedRef = useRef(false);
+  const attemptIdRef = useRef(null);
+  const submittingRef = useRef(false);
+  const submitLockRef = useRef(false);
+  const violationCountRef = useRef(0);
+  const lastViolationAtRef = useRef(0);
+  const leaveSignalActiveRef = useRef(false);
+
+  useEffect(() => {
+    submittingRef.current = submitting;
+  }, [submitting]);
+
+  const setViolationValue = (nextCount) => {
+    violationCountRef.current = nextCount;
+    setViolationCount(nextCount);
+    if (attemptIdRef.current) {
+      sessionStorage.setItem(violationStorageKey(attemptIdRef.current), String(nextCount));
+    }
+  };
+
+  const submitForViolation = async () => {
+    const id = attemptIdRef.current || localStorage.getItem(attemptKey);
+    if (!id || submitLockRef.current || submittingRef.current || submittedRef.current) return;
+    submitLockRef.current = true;
+    submittedRef.current = true;
+    setSubmitting(true);
+    try {
+      await api.submitAttempt(id, {});
+    } catch {
+      // If already submitted server-side, continue to done page.
+    }
+    localStorage.removeItem(attemptKey);
+    sessionStorage.removeItem(violationStorageKey(id));
+    navigate(`/done?round=${round}`, { replace: true });
+  };
+
+  const registerViolation = () => {
+    if (loading || submittingRef.current || submittedRef.current) return;
+
+    // Prevent accidental double-counting when multiple browser events fire for one action.
+    const nowTs = Date.now();
+    if (nowTs - lastViolationAtRef.current < 800) return;
+    lastViolationAtRef.current = nowTs;
+
+    const nextCount = violationCountRef.current + 1;
+    setViolationValue(nextCount);
+
+    if (nextCount === 1) {
+      setViolationWarning(violationMessage);
+      return;
+    }
+
+    setViolationWarning('');
+    void submitForViolation();
+  };
+
+  const registerLeaveViolation = () => {
+    if (leaveSignalActiveRef.current) return;
+    leaveSignalActiveRef.current = true;
+    registerViolation();
+  };
+
+  const clearLeaveSignal = () => {
+    leaveSignalActiveRef.current = false;
+  };
 
   // ---- Load (or resume) the attempt on mount ----
   useEffect(() => {
@@ -36,13 +107,13 @@ export default function Quiz() {
     (async () => {
       try {
         let data = null;
-        const savedId = localStorage.getItem(ATTEMPT_KEY);
+        const savedId = localStorage.getItem(attemptKey);
         if (savedId) {
           try {
             data = await api.getAttempt(savedId);
           } catch (e) {
             if ([400, 401, 403, 404].includes(e.status)) {
-              localStorage.removeItem(ATTEMPT_KEY);
+              localStorage.removeItem(attemptKey);
               data = null;
             } else {
               throw e;
@@ -50,18 +121,18 @@ export default function Quiz() {
           }
         }
         if (!data) {
-          data = await api.startAttempt({ round: 1 });
+          data = await api.startAttempt({ round });
         }
         if (cancelled) return;
 
         if (data.attempt.status === 'submitted') {
           submittedRef.current = true;
-          localStorage.removeItem(ATTEMPT_KEY);
-          navigate('/done', { replace: true });
+          localStorage.removeItem(attemptKey);
+          navigate(`/done?round=${round}`, { replace: true });
           return;
         }
 
-        localStorage.setItem(ATTEMPT_KEY, data.attempt._id);
+        localStorage.setItem(attemptKey, data.attempt._id);
         const ansMap = {};
         data.questions.forEach((q) => {
           ansMap[q._id] = data.answers[q._id] || '';
@@ -69,14 +140,23 @@ export default function Quiz() {
         setQuestions(data.questions);
         setAnswers(ansMap);
         setAttemptId(data.attempt._id);
+        attemptIdRef.current = data.attempt._id;
+
+        const restoredViolations = Number(sessionStorage.getItem(violationStorageKey(data.attempt._id)) || '0');
+        const safeViolations = Number.isFinite(restoredViolations) && restoredViolations > 0
+          ? Math.floor(restoredViolations)
+          : 0;
+        setViolationValue(safeViolations);
+        if (safeViolations > 0) setViolationWarning(violationMessage);
+
         setClockOffset(data.serverTime - Date.now());
         setEndsAt(data.attempt.startedAt + data.attempt.timeLimitSeconds * 1000);
         setLoading(false);
       } catch (e) {
         if (cancelled) return;
-        if (e.status === 409) {
-          localStorage.removeItem(ATTEMPT_KEY);
-          navigate('/done', { replace: true });
+        if (e.status === 409 && (e.data?.submitted === true || /already been submitted/i.test(e.message || ''))) {
+          localStorage.removeItem(attemptKey);
+          navigate(`/done?round=${round}`, { replace: true });
           return;
         }
         setFatalError(e.message || 'Failed to load the quiz.');
@@ -86,7 +166,7 @@ export default function Quiz() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, round]);
 
   // ---- Ticking clock ----
   useEffect(() => {
@@ -96,6 +176,61 @@ export default function Quiz() {
 
   const remainingMs = endsAt ? Math.max(0, endsAt - (now + clockOffset)) : 0;
 
+  // ---- Tab switch + fullscreen anti-cheat ----
+  useEffect(() => {
+    if (loading) return undefined;
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        registerLeaveViolation();
+        return;
+      }
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        clearLeaveSignal();
+      }
+    };
+
+    const onWindowBlur = () => {
+      registerLeaveViolation();
+    };
+
+    const onWindowFocus = () => {
+      if (document.visibilityState === 'visible') {
+        clearLeaveSignal();
+      }
+    };
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) registerViolation();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, [loading]);
+
+  // ---- Native leave/reload warning while quiz is active ----
+  useEffect(() => {
+    if (loading || submitting || submittedRef.current || !attemptId) return undefined;
+
+    const onBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [attemptId, loading, submitting]);
+
   // ---- Auto-submit on expiry ----
   useEffect(() => {
     if (!endsAt || submitting || submittedRef.current) return;
@@ -104,15 +239,16 @@ export default function Quiz() {
     setSubmitting(true);
     (async () => {
       try {
-        const id = localStorage.getItem(ATTEMPT_KEY);
+        const id = localStorage.getItem(`qc_attempt_id_round_${round}`);
         if (id) await api.submitAttempt(id, {});
       } catch {
         /* server will auto-close on its side regardless */
       }
-      localStorage.removeItem(ATTEMPT_KEY);
-      navigate('/done', { replace: true });
+      if (attemptIdRef.current) sessionStorage.removeItem(violationStorageKey(attemptIdRef.current));
+      localStorage.removeItem(`qc_attempt_id_round_${round}`);
+      navigate(`/done?round=${round}`, { replace: true });
     })();
-  }, [remainingMs, endsAt, submitting, navigate]);
+  }, [remainingMs, endsAt, submitting, navigate, round]);
 
   // ---- Answer selection (immediate save) ----
   const selectOption = async (optionKey) => {
@@ -128,8 +264,8 @@ export default function Quiz() {
     } catch (e) {
       if (e.status === 410 || e.status === 409) {
         submittedRef.current = true;
-        localStorage.removeItem(ATTEMPT_KEY);
-        navigate('/done', { replace: true });
+        localStorage.removeItem(`qc_attempt_id_round_${round}`);
+        navigate(`/done?round=${round}`, { replace: true });
         return;
       }
       setAnswers((a) => ({ ...a, [q._id]: previous }));
@@ -149,16 +285,17 @@ export default function Quiz() {
     const unanswered = questions.length - answered;
     const msg =
       unanswered > 0
-        ? `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Submit Round 1 anyway? This cannot be undone.`
-        : 'Submit Round 1? This cannot be undone.';
+        ? `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Submit Round ${round} anyway? This cannot be undone.`
+        : `Submit Round ${round}? This cannot be undone.`;
     if (!window.confirm(msg)) return;
 
     setSubmitting(true);
     submittedRef.current = true;
     try {
       await api.submitAttempt(attemptId, {});
-      localStorage.removeItem(ATTEMPT_KEY);
-      navigate('/done', { replace: true });
+      if (attemptIdRef.current) sessionStorage.removeItem(violationStorageKey(attemptIdRef.current));
+      localStorage.removeItem(`qc_attempt_id_round_${round}`);
+      navigate(`/done?round=${round}`, { replace: true });
     } catch (e) {
       setSubmitting(false);
       submittedRef.current = false;
@@ -237,6 +374,13 @@ export default function Quiz() {
           {answeredCount}/{questions.length} answered
         </span>
       </div>
+
+      {violationWarning && (
+        <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <div className="font-semibold">Warning</div>
+          <div className="mt-1">{violationWarning}</div>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-3">

@@ -1,9 +1,11 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTeam } from '../context/TeamContext';
 import Logo from '../components/Logo';
 
 export default function Done() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const round = Number(params.get('round')) || 1;
   const { team, logoutTeam } = useTeam();
 
   return (
@@ -29,7 +31,7 @@ export default function Done() {
             </svg>
           </div>
 
-          <h1 className="mt-5 text-3xl font-extrabold text-white">Round 1 Submitted!</h1>
+          <h1 className="mt-5 text-3xl font-extrabold text-white">Round {round} Submitted!</h1>
           <p className="mt-2 text-slate-300">
             Nicely done{team ? `, Team ${team.teamNumber}` : ''}. Your answers are locked in.
           </p>

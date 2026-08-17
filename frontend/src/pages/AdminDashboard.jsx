@@ -5,261 +5,646 @@ import { useAdmin } from '../context/AdminContext';
 import Logo from '../components/Logo';
 import Spinner from '../components/Spinner';
 
-const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—');
+const time = (value) => value ? new Date(value).toLocaleString() : '—';
+const Tabs = [
+  'Overview',
+  'Teams',
+  'Questions',
+  'Round 1 Results',
+  'Round 2 Results',
+  'Combined Results',
+];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { admin, logoutAdmin } = useAdmin();
-
-  const [overview, setOverview] = useState(null);
-  const [teams, setTeams] = useState([]);
-  const [rankings, setRankings] = useState([]);
+  const [tab, setTab] = useState('Overview');
+  const [data, setData] = useState({ overview: null, teams: [], round1: [], round2: [], combined: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busyId, setBusyId] = useState(null); // action in progress (string key)
 
-  const loadAll = useCallback(async () => {
-    setError('');
+  const [questionRound, setQuestionRound] = useState(1);
+const [questions, setQuestions] = useState([]);
+const [questionsLoading, setQuestionsLoading] = useState(false);
+const [showQuestionForm, setShowQuestionForm] = useState(false);
+const [editingQuestion, setEditingQuestion] = useState(null);
+
+const emptyQuestion = {
+  order: '',
+  type: 'mcq',
+  questionText: '',
+  imageUrl: '',
+  options: [
+    { key: 'A', text: '' },
+    { key: 'B', text: '' },
+    { key: 'C', text: '' },
+    { key: 'D', text: '' },
+  ],
+  correctAnswer: 'A',
+  marks: 1,
+};
+const [questionForm, setQuestionForm] = useState(emptyQuestion);
+
+
+  const load = useCallback(async () => {
     try {
-      const [ov, tm, rk] = await Promise.all([
-        api.adminOverview(),
-        api.adminTeams(),
-        api.adminRankings(),
+      const [overview, teams, round1, round2, combined] = await Promise.all([
+        api.adminOverview(), api.adminTeams(), api.adminRankings(1), api.adminRankings(2), api.adminCombinedResults(),
       ]);
-      setOverview(ov);
-      setTeams(tm.teams);
-      setRankings(rk.rankings);
-    } catch (e) {
-      setError(e.message || 'Failed to load data');
-      if (e.status === 401) navigate('/admin/login', { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
+      setData({ overview, teams: teams.teams, round1: round1.rankings, round2: round2.rankings, combined: combined.results });
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard');
+      if (err.status === 401) {
+        logoutAdmin();
+        navigate('/admin', { replace: true });
+      }
+    } finally { setLoading(false); }
+  }, [logoutAdmin, navigate]);
 
-  useEffect(() => {
-    loadAll();
-    const id = setInterval(loadAll, 8000); // auto-refresh every 8s during the event
-    return () => clearInterval(id);
-  }, [loadAll]);
+  const loadQuestions = useCallback(async () => {
+  setQuestionsLoading(true);
 
-  const doAction = async (key, fn, okMsg) => {
-    setBusyId(key);
-    try {
-      await fn();
-      await loadAll();
-    } catch (e) {
-      setError(e.message || okMsg ? `${okMsg} failed` : 'Action failed');
-    } finally {
-      setBusyId(null);
-    }
-  };
+  try {
+    const result = await api.adminQuestions(questionRound);
+    setQuestions(result.questions || []);
+    setError('');
+  } catch (err) {
+    setError(err.message || 'Failed to load questions');
+  } finally {
+    setQuestionsLoading(false);
+  }
+}, [questionRound]);
 
-  const handleForceSubmit = (attemptId, teamNumber) =>
-    window.confirm(`Force-submit Team ${teamNumber}? Their current answers will be locked and scored.`) &&
-    doAction(`force-${attemptId}`, () => api.adminForceSubmit(attemptId));
+useEffect(() => {
+  if (tab === 'Questions') {
+    loadQuestions();
+  }
+}, [tab, loadQuestions]);
 
-  const handleReset = (teamNumber) =>
-    window.confirm(`Reset Team ${teamNumber}'s attempt? They will be able to start Round 1 again from scratch (registration is kept).`) &&
-    doAction(`reset-${teamNumber}`, () => api.adminResetAttempt(teamNumber));
+const openAddQuestion = () => {
+  setEditingQuestion(null);
+  setQuestionForm({
+    ...emptyQuestion,
+    order: questions.length + 1,
+    marks: 1,
+  });
+  setShowQuestionForm(true);
+};
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Spinner label="Loading dashboard…" />
-      </div>
-    );
+const openEditQuestion = (question) => {
+  setShowQuestionForm(false);
+  setEditingQuestion(question);
+  setQuestionForm({
+    order: question.order,
+    type: question.type || 'mcq',
+    questionText: question.questionText,
+    imageUrl: question.imageUrl || '',
+    options: question.options.map((option) => ({
+      key: option.key,
+      text: option.text,
+    })),
+    correctAnswer: question.correctAnswer || 'A',
+    marks: question.marks || 1,
+  });
+};
+
+const handleQuestionImage = (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    setError('Please select an image file.');
+    return;
   }
 
-  return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-      {/* Header */}
-      <header className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-4">
-          <Logo subtitle={false} />
-          <div className="hidden h-8 w-px bg-slate-800 sm:block" />
-          <div className="hidden sm:block">
-            <div className="text-xs uppercase tracking-widest text-slate-400">Admin Dashboard</div>
-            <div className="text-sm font-semibold text-white">Signed in as {admin?.username}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={loadAll} className="btn-ghost text-sm">
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 4v6h-6M1 20v-6h6" />
-              <path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15" />
-            </svg>
-            Refresh
-          </button>
-          <button
-            onClick={() => {
-              logoutAdmin();
-              navigate('/admin/login');
-            }}
-            className="btn-ghost text-sm"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+  // Keep MongoDB documents reasonably small.
+  if (file.size > 2 * 1024 * 1024) {
+    setError('Image must be smaller than 2 MB.');
+    return;
+  }
 
-      {error && (
-        <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    setQuestionForm((current) => ({
+      ...current,
+      type: 'image',
+      imageUrl: reader.result,
+    }));
+    setError('');
+  };
+
+  reader.onerror = () => {
+    setError('Failed to read the image.');
+  };
+
+  reader.readAsDataURL(file);
+};
+
+const closeQuestionForm = () => {
+  setShowQuestionForm(false);
+  setEditingQuestion(null);
+};
+
+const saveQuestion = async () => {
+  try {
+    if (!questionForm.questionText.trim()) {
+      setError('Question text is required');
+      return;
+    }
+
+    if (questionForm.options.some((option) => !option.text.trim())) {
+      setError('All four options are required');
+      return;
+    }
+
+    const payload = {
+      round: questionRound,
+      order: Number(questionForm.order),
+      type: questionRound === 2 ? questionForm.type : 'mcq',
+      questionText: questionForm.questionText.trim(),
+      imageUrl: questionRound === 2 ? questionForm.imageUrl : '',
+      options: questionForm.options,
+      correctAnswer: questionForm.correctAnswer,
+      marks: Number(questionForm.marks) || 1,
+    };
+
+    if (editingQuestion) {
+      await api.adminUpdateQuestion(editingQuestion._id, payload);
+    } else {
+      await api.adminCreateQuestion(payload);
+    }
+
+    setShowQuestionForm(false);
+    setEditingQuestion(null);
+    await loadQuestions();
+  } catch (err) {
+    setError(err.message || 'Failed to save question');
+  }
+};
+
+const deleteQuestion = async (question) => {
+  if (!window.confirm(`Delete Question ${question.order}?`)) return;
+
+  try {
+    await api.adminDeleteQuestion(question._id);
+    await loadQuestions();
+  } catch (err) {
+    setError(err.message || 'Failed to delete question');
+  }
+};
+
+
+  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, [load]);
+  const reset = async (teamNumber, round) => {
+    if (!window.confirm(`Reset Team ${teamNumber} Round ${round}?`)) return;
+    try { await api.adminResetAttempt(teamNumber, round); await load(); } catch (err) { setError(err.message); }
+  };
+  const forceSubmit = async (attempt) => {
+    if (!window.confirm('Force-submit this attempt?')) return;
+    try { await api.adminForceSubmit(attempt.attemptId); await load(); } catch (err) { setError(err.message); }
+  };
+
+  if (loading) return <Spinner full label="Loading dashboard…" />;
+  const overview = data.overview || {};
+  return <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+    <header className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div className="flex items-center gap-4"><Logo subtitle={false} /><div><div className="text-xs uppercase tracking-widest text-slate-400">Admin Dashboard</div><div className="text-sm font-semibold text-white">Signed in as {admin?.username}</div></div></div><div className="flex gap-2"><button onClick={load} className="btn-ghost text-sm">Refresh</button><button onClick={() => { logoutAdmin(); navigate('/admin'); }} className="btn-ghost text-sm">Sign out</button></div></header>
+    {error && <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}
+    <nav className="mt-4 flex flex-wrap gap-2">{Tabs.map((item) => <button key={item} onClick={() => setTab(item)} className={tab === item ? 'btn-primary text-sm' : 'btn-ghost text-sm'}>{item}</button>)}</nav>
+    {tab === 'Overview' && <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><Stat label="Teams" value={overview.registered || 0} /><Stat label="R1 submitted" value={overview.submitted || 0} /><Stat label="R2 submitted" value={overview.round2Submitted || 0} /><Stat label="R2 live" value={overview.round2InProgress || 0} /></section>}
+    {tab === 'Teams' && <section className="card mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th><th className="p-4">Round 2</th><th className="p-4">Actions</th></tr></thead><tbody>{data.teams.map((team) => <tr key={team.teamNumber} className="border-t border-slate-800"><td className="p-4 font-mono font-bold">{String(team.teamNumber).padStart(2, '0')}</td><td className="p-4">{team.participants.join(' · ') || '—'}</td><td className="p-4"><Status attempt={team.round1} /></td><td className="p-4"><Status attempt={team.round2} /></td><td className="p-4 space-x-2">{[team.round1, team.round2].filter(Boolean).map((attempt) => <span key={attempt.attemptId}>{attempt.status === 'in-progress' && <button onClick={() => forceSubmit(attempt)} className="btn-ghost px-2 py-1 text-xs">Force submit</button>}<button onClick={() => reset(team.teamNumber, attempt.round || (attempt === team.round1 ? 1 : 2))} className="btn-danger px-2 py-1 text-xs">Reset</button></span>)}</td></tr>)}</tbody></table></section>}
+    {tab === 'Questions' && (
+  <section className="card mt-4 p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="font-semibold text-white">Question Management</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Manage MCQs before the round starts.
+        </p>
+      </div>
+
+      <button
+        onClick={openAddQuestion}
+        className="btn-primary text-sm"
+      >
+        + Add Question
+      </button>
+    </div>
+
+    <div className="mt-5 flex gap-2">
+      {[1, 2].map((round) => (
+        <button
+          key={round}
+          onClick={() => {
+            setQuestionRound(round);
+            setShowQuestionForm(false);
+          }}
+          className={
+            questionRound === round
+              ? 'btn-primary text-sm'
+              : 'btn-ghost text-sm'
+          }
+        >
+          Round {round}
+        </button>
+      ))}
+    </div>
+
+    {showQuestionForm && (
+  <div className="mt-5 rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h3 className="font-semibold text-white">Add Question</h3>
+
+      <button
+        type="button"
+        onClick={closeQuestionForm}
+        className="btn-ghost px-2 py-1 text-xs"
+      >
+        Cancel
+      </button>
+    </div>
+
+    <div className="grid gap-3">
+
+      {/* Question number + marks */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm text-slate-300">
+          <span className="mb-1 block">Question number</span>
+
+          <input
+            className="input"
+            type="number"
+            min="1"
+            value={questionForm.order}
+            onChange={(e) =>
+              setQuestionForm({
+                ...questionForm,
+                order: e.target.value,
+              })
+            }
+          />
+        </label>
+
+        <label className="block text-sm text-slate-300">
+          <span className="mb-1 block">Marks</span>
+
+          <input
+            className="input"
+            type="number"
+            min="1"
+            value={questionForm.marks}
+            onChange={(e) =>
+              setQuestionForm({
+                ...questionForm,
+                marks: e.target.value,
+              })
+            }
+          />
+        </label>
+      </div>
+
+      {/* Round 2 question type + image */}
+      {questionRound === 2 && (
+        <div className="rounded-xl border border-slate-700 bg-slate-950/50 p-3">
+          <label className="block text-sm text-slate-300">
+            <span className="mb-1 block">Question type</span>
+
+            <select
+              className="input"
+              value={questionForm.type}
+              onChange={(e) =>
+                setQuestionForm({
+                  ...questionForm,
+                  type: e.target.value,
+                  imageUrl:
+                    e.target.value === 'mcq'
+                      ? ''
+                      : questionForm.imageUrl,
+                })
+              }
+            >
+              <option value="mcq">Text MCQ</option>
+              <option value="image">Image Question</option>
+            </select>
+          </label>
+
+          {questionForm.type === 'image' && (
+            <div className="mt-3">
+              <label className="block text-sm text-slate-300">
+                <span className="mb-1 block">Question Image</span>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm text-slate-300"
+                  onChange={handleQuestionImage}
+                />
+              </label>
+
+              {questionForm.imageUrl && (
+                <div className="mt-3 rounded-lg border border-slate-700 p-2">
+                  <img
+                    src={questionForm.imageUrl}
+                    alt="Question preview"
+                    className="max-h-64 max-w-full rounded object-contain"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Stats */}
-      <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Registered" value={overview?.registered ?? 0} sub={`of ${overview?.totalTeams ?? 16}`} tone="indigo" />
-        <StatCard label="In progress" value={overview?.inProgress ?? 0} sub="Round 1 live" tone="amber" />
-        <StatCard label="Submitted" value={overview?.submitted ?? 0} sub="Round 1 done" tone="emerald" />
-        <StatCard label="Top score" value={rankings[0]?.score ?? '—'} sub={rankings[0] ? `Team ${rankings[0].teamNumber}` : 'no data'} tone="fuchsia" />
-      </section>
+      {/* Question text */}
+      <label className="block text-sm text-slate-300">
+        <span className="mb-1 block">Question text</span>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        {/* Teams table */}
-        <section className="card overflow-hidden lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <h2 className="font-semibold text-white">Teams &amp; Round 1 Scores</h2>
-            <span className="text-xs text-slate-400">{teams.length} registered</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-                  <th className="px-5 py-3">Team</th>
-                  <th className="px-5 py-3">Members</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Score</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/70">
-                {teams.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                      No teams registered yet.
-                    </td>
-                  </tr>
-                )}
-                {teams.map((t) => (
-                  <tr key={t.teamNumber} className="hover:bg-slate-800/30">
-                    <td className="px-5 py-3">
-                      <span className="font-mono font-bold text-white">{String(t.teamNumber).padStart(2, '0')}</span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="text-slate-200">{t.member1Name}</div>
-                      <div className="text-xs text-slate-500">{t.member2Name}</div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusBadge attempt={t.attempt} />
-                    </td>
-                    <td className="px-5 py-3 font-mono font-semibold text-white">
-                      {t.attempt?.status === 'submitted' ? t.attempt.score : '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-2">
-                        {t.attempt?.status === 'in-progress' && (
-                          <button
-                            disabled={busyId === `force-${t.attempt.attemptId}`}
-                            onClick={() => handleForceSubmit(t.attempt.attemptId, t.teamNumber)}
-                            className="btn-ghost px-2.5 py-1.5 text-xs"
-                          >
-                            {busyId === `force-${t.attempt.attemptId}` ? '…' : 'Force submit'}
-                          </button>
-                        )}
-                        {t.attempt && (
-                          <button
-                            disabled={busyId === `reset-${t.teamNumber}`}
-                            onClick={() => handleReset(t.teamNumber)}
-                            className="btn-danger px-2.5 py-1.5 text-xs"
-                          >
-                            {busyId === `reset-${t.teamNumber}` ? '…' : 'Reset'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <textarea
+          className="input min-h-20"
+          value={questionForm.questionText}
+          onChange={(e) =>
+            setQuestionForm({
+              ...questionForm,
+              questionText: e.target.value,
+            })
+          }
+        />
+      </label>
 
-        {/* Rankings */}
-        <section className="card overflow-hidden">
-          <div className="border-b border-slate-800 px-5 py-4">
-            <h2 className="font-semibold text-white">Leaderboard</h2>
-            <p className="text-xs text-slate-400">Round 1 · sorted by score</p>
-          </div>
-          <ol className="divide-y divide-slate-800/70">
-            {rankings.length === 0 && (
-              <li className="px-5 py-10 text-center text-sm text-slate-500">No submissions yet.</li>
-            )}
-            {rankings.map((r) => (
-              <li key={r.teamNumber} className="flex items-center gap-3 px-5 py-3">
-                <RankMedal rank={r.rank} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-white">Team {r.teamNumber}</div>
-                  <div className="truncate text-xs text-slate-500">{r.members.filter(Boolean).join(' · ')}</div>
+      {/* Options */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {questionForm.options.map((option, index) => (
+          <label
+            key={option.key}
+            className="block text-sm text-slate-300"
+          >
+            <span className="mb-1 block">
+              Option {option.key}
+            </span>
+
+            <input
+              className="input"
+              value={option.text}
+              onChange={(e) => {
+                const options = [...questionForm.options];
+
+                options[index] = {
+                  ...options[index],
+                  text: e.target.value,
+                };
+
+                setQuestionForm({
+                  ...questionForm,
+                  options,
+                });
+              }}
+            />
+          </label>
+        ))}
+      </div>
+
+      {/* Correct answer */}
+      <label className="block text-sm text-slate-300">
+        <span className="mb-1 block">Correct answer</span>
+
+        <select
+          className="input"
+          value={questionForm.correctAnswer}
+          onChange={(e) =>
+            setQuestionForm({
+              ...questionForm,
+              correctAnswer: e.target.value,
+            })
+          }
+        >
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </label>
+
+      {/* Buttons */}
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={closeQuestionForm}
+          className="btn-ghost text-sm"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          onClick={saveQuestion}
+          className="btn-primary text-sm"
+        >
+          Add Question
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+    {questionsLoading ? (
+      <div className="py-10 text-center text-slate-400">
+        Loading questions...
+      </div>
+    ) : questions.length === 0 ? (
+      <div className="py-10 text-center text-slate-400">
+        No questions found for Round {questionRound}.
+      </div>
+    ) : (
+      <div className="mt-5 space-y-3">
+        {questions.map((question) => (
+          <div
+            key={question._id}
+            className="rounded-xl border border-slate-800 p-3"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                  Question {question.order}
                 </div>
-                <div className="font-mono text-lg font-bold text-white">{r.score}</div>
-              </li>
-            ))}
-          </ol>
-        </section>
+
+                <div className="mt-2 text-sm font-medium text-white">
+                  {question.questionText}
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {question.options.map((option) => (
+                    <div
+                      key={option.key}
+                      className="rounded-lg bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <span className="font-semibold text-slate-100">
+                        {option.key}.
+                      </span>{' '}
+                      {option.text}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 text-[11px] text-emerald-400">
+                  Correct answer: {question.correctAnswer || 'Hidden'}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 gap-2">
+                <button
+                  onClick={() => openEditQuestion(question)}
+                  className="btn-ghost px-3 py-1 text-[11px]"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => deleteQuestion(question)}
+                  className="btn-danger px-3 py-1 text-[11px]"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            {editingQuestion && editingQuestion._id === question._id && (
+              <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-medium text-white">Edit Question</h4>
+                  <button
+                    type="button"
+                    onClick={closeQuestionForm}
+                    className="btn-ghost px-2 py-1 text-[11px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm text-slate-300">
+                      <span className="mb-1 block">Question number</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={questionForm.order}
+                        onChange={(e) =>
+                          setQuestionForm({
+                            ...questionForm,
+                            order: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+
+                    <label className="block text-sm text-slate-300">
+                      <span className="mb-1 block">Marks</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={questionForm.marks}
+                        onChange={(e) =>
+                          setQuestionForm({
+                            ...questionForm,
+                            marks: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Question text</span>
+                    <textarea
+                      className="input min-h-20"
+                      value={questionForm.questionText}
+                      onChange={(e) =>
+                        setQuestionForm({
+                          ...questionForm,
+                          questionText: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {questionForm.options.map((option, index) => (
+                      <label key={option.key} className="block text-sm text-slate-300">
+                        <span className="mb-1 block">Option {option.key}</span>
+                        <input
+                          className="input"
+                          value={option.text}
+                          onChange={(e) => {
+                            const options = [...questionForm.options];
+                            options[index] = {
+                              ...options[index],
+                              text: e.target.value,
+                            };
+
+                            setQuestionForm({
+                              ...questionForm,
+                              options,
+                            });
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Correct answer</span>
+                    <select
+                      className="input"
+                      value={questionForm.correctAnswer}
+                      onChange={(e) =>
+                        setQuestionForm({
+                          ...questionForm,
+                          correctAnswer: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                    </select>
+                  </label>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={closeQuestionForm}
+                      className="btn-ghost text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveQuestion}
+                      className="btn-primary text-sm"
+                    >
+                      Update Question
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
+    )}
+  </section>
+)}
 
-      {/* Phase 2 note */}
-      <div className="card mt-4 flex flex-col items-start justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center">
-        <div className="text-sm text-slate-400">
-          <span className="chip mr-2">Phase 2</span>
-          Round start/pause/resume controls, Round 2 puzzles, CSV export and AI features arrive next.
-        </div>
-        <Link to="/" className="text-sm text-slate-400 hover:text-slate-200">View participant site →</Link>
-      </div>
-    </div>
-  );
+    {tab === 'Round 1 Results' && <Results rows={data.round1} title="Round 1 Results" />}
+    {tab === 'Round 2 Results' && <Results rows={data.round2} title="Round 2 Results" />}
+    {tab === 'Combined Results' && <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">Combined Results</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th><th className="p-4">Round 2</th><th className="p-4">Total</th></tr></thead><tbody>{data.combined.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ') || '—'}</td><td className="p-4">{row.round1Score ?? '—'}</td><td className="p-4">{row.round2Score ?? '—'}</td><td className="p-4 font-mono font-bold">{row.total}</td></tr>)}</tbody></table></section>}
+    <div className="mt-5 text-sm text-slate-400"><Link to="/round1" className="hover:text-white">View participant site →</Link></div>
+  </div>;
 }
-
-function StatCard({ label, value, sub, tone }) {
-  const tones = {
-    indigo: 'text-indigo-300',
-    amber: 'text-amber-300',
-    emerald: 'text-emerald-300',
-    fuchsia: 'text-fuchsia-300',
-  };
-  return (
-    <div className="card p-4">
-      <div className="text-xs uppercase tracking-wider text-slate-400">{label}</div>
-      <div className={`mt-1 font-mono text-3xl font-bold ${tones[tone]}`}>{value}</div>
-      <div className="text-xs text-slate-500">{sub}</div>
-    </div>
-  );
-}
-
-function StatusBadge({ attempt }) {
-  if (!attempt) return <span className="chip border-slate-700 text-slate-400">Not started</span>;
-  if (attempt.status === 'in-progress')
-    return <span className="chip border-amber-500/40 bg-amber-500/10 text-amber-300">In progress</span>;
-  const map = {
-    manual: ['Submitted', 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'],
-    auto: ['Auto-submitted', 'border-sky-500/40 bg-sky-500/10 text-sky-300'],
-    forced: ['Forced', 'border-rose-500/40 bg-rose-500/10 text-rose-300'],
-  };
-  const [text, cls] = map[attempt.submissionType] || map.manual;
-  return <span className={`chip ${cls}`}>{text}</span>;
-}
-
-function RankMedal({ rank }) {
-  const styles = {
-    1: 'bg-amber-400/20 text-amber-300 border-amber-400/40',
-    2: 'bg-slate-300/15 text-slate-200 border-slate-300/30',
-    3: 'bg-orange-500/15 text-orange-300 border-orange-500/40',
-  };
-  const cls = styles[rank] || 'bg-slate-800/60 text-slate-400 border-slate-700';
-  return (
-    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-bold ${cls}`}>
-      {rank}
-    </span>
-  );
-}
+function Stat({ label, value }) { return <div className="card p-4"><div className="text-xs uppercase text-slate-400">{label}</div><div className="mt-1 font-mono text-3xl font-bold text-white">{value}</div></div>; }
+function Status({ attempt }) { return !attempt ? <span className="text-slate-500">Not started</span> : <span>{attempt.status === 'submitted' ? `Submitted · ${attempt.score}` : 'In progress'}</span>; }
+function Results({ rows, title }) { return <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">{title}</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Score</th><th className="p-4">Status</th><th className="p-4">Submitted</th></tr></thead><tbody>{rows.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ')}</td><td className="p-4 font-mono">{row.score}</td><td className="p-4">{row.submissionType || 'submitted'}</td><td className="p-4">{time(row.submittedAt)}</td></tr>)}</tbody></table></section>; }

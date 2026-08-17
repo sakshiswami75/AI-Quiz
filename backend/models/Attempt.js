@@ -14,6 +14,14 @@ const attemptSchema = new mongoose.Schema(
     team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', required: true },
     teamNumber: { type: Number, required: true },
     round: { type: Number, required: true, default: 1 },
+    participants: {
+      type: [{ type: String, trim: true }],
+      default: undefined,
+      validate: {
+        validator: (names) => !names || names.length === 2,
+        message: 'Exactly two participants are required',
+      },
+    },
     answers: [answerSchema],
     score: { type: Number, default: 0 }, // populated on submission; hidden from teams
     status: { type: String, enum: ['in-progress', 'submitted'], default: 'in-progress' },

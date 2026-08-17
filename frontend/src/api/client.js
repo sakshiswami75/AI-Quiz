@@ -51,6 +51,7 @@ export const api = {
   availability: () => request('GET', '/teams/availability', { tokenType: 'public' }),
   register: (payload) => request('POST', '/teams/register', { body: payload, tokenType: 'public' }),
   login: (payload) => request('POST', '/teams/login', { body: payload, tokenType: 'public' }),
+  startSession: (payload) => request('POST', '/teams/session', { body: payload, tokenType: 'public' }),
   teamMe: () => request('GET', '/teams/me', { tokenType: 'team' }),
 
   // attempts (team)
@@ -63,7 +64,27 @@ export const api = {
   adminLogin: (payload) => request('POST', '/auth/admin/login', { body: payload, tokenType: 'public' }),
   adminOverview: () => request('GET', '/admin/overview', { tokenType: 'admin' }),
   adminTeams: () => request('GET', '/admin/teams', { tokenType: 'admin' }),
-  adminRankings: () => request('GET', '/admin/rankings', { tokenType: 'admin' }),
+  adminRankings: (round = 1) => request('GET', `/admin/rankings?round=${round}`, { tokenType: 'admin' }),
+  adminCombinedResults: () => request('GET', '/admin/results/combined', { tokenType: 'admin' }),
   adminForceSubmit: (id) => request('POST', `/admin/attempts/${id}/force-submit`, { tokenType: 'admin' }),
-  adminResetAttempt: (teamNumber) => request('DELETE', `/admin/teams/${teamNumber}/reset`, { tokenType: 'admin' }),
+  adminResetAttempt: (teamNumber, round = 1) => request('DELETE', `/admin/teams/${teamNumber}/reset?round=${round}`, { tokenType: 'admin' }),
+  adminQuestions: (round = 1) =>
+  request('GET', `/admin/questions?round=${round}`, { tokenType: 'admin' }),
+
+adminCreateQuestion: (payload) =>
+  request('POST', '/admin/questions', {
+    body: payload,
+    tokenType: 'admin',
+  }),
+
+adminUpdateQuestion: (id, payload) =>
+  request('PUT', `/admin/questions/${id}`, {
+    body: payload,
+    tokenType: 'admin',
+  }),
+
+adminDeleteQuestion: (id) =>
+  request('DELETE', `/admin/questions/${id}`, {
+    tokenType: 'admin',
+  }),
 };

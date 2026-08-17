@@ -31,7 +31,6 @@ export default function Home() {
                 <path d="M5 12h14M13 6l6 6-6 6" />
               </svg>
             </Link>
-            <Link to="/admin/login" className="btn-ghost text-base">Admin Login</Link>
           </div>
 
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-4">
