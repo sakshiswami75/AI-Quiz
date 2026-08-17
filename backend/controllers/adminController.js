@@ -53,8 +53,14 @@ exports.teams = async (req, res, next) => {
 // GET /api/admin/rankings?round=1|2 -> submitted results for one round
 exports.rankings = async (req, res, next) => {
   try {
-    const round = [1, 2].includes(Number(req.query.round)) ? Number(req.query.round) : 1;
-    const submitted = await Attempt.find({ round, status: 'submitted' })
+    const round = [1, 2].includes(Number(req.query.round))
+      ? Number(req.query.round)
+      : 1;
+
+    const submitted = await Attempt.find({
+      round,
+      status: 'submitted'
+    })
       .sort({ score: -1, submittedAt: 1 })
       .lean();
 
@@ -65,7 +71,15 @@ exports.rankings = async (req, res, next) => {
       score: a.score,
       submissionType: a.submissionType,
       submittedAt: a.submittedAt,
+      startedAt: a.startedAt,
+      timeTakenSeconds:
+        a.startedAt && a.submittedAt
+          ? Math.round(
+              (new Date(a.submittedAt) - new Date(a.startedAt)) / 1000
+            )
+          : null,
     }));
+
     return res.json({ rankings });
   } catch (err) {
     return next(err);
@@ -84,8 +98,30 @@ exports.combinedResults = async (req, res, next) => {
       const round2 = byTeam.get(`${team.teamNumber}-2`);
       const round1Score = round1?.status === 'submitted' ? round1.score : null;
       const round2Score = round2?.status === 'submitted' ? round2.score : null;
-      return { teamNumber: team.teamNumber, participants: round1?.participants || [], round1Score, round2Score,
-        total: (round1Score || 0) + (round2Score || 0), complete: round1Score !== null && round2Score !== null };
+      const round1Time =
+  round1?.status === 'submitted' && round1.startedAt && round1.submittedAt
+    ? Math.round((new Date(round1.submittedAt) - new Date(round1.startedAt)) / 1000)
+    : null;
+
+const round2Time =
+  round2?.status === 'submitted' && round2.startedAt && round2.submittedAt
+    ? Math.round((new Date(round2.submittedAt) - new Date(round2.startedAt)) / 1000)
+    : null;
+
+const totalTime =
+  (round1Time || 0) + (round2Time || 0);
+
+return {
+  teamNumber: team.teamNumber,
+  participants: round1?.participants || [],
+  round1Score,
+  round2Score,
+  round1Time,
+  round2Time,
+  totalTime,
+  total: (round1Score || 0) + (round2Score || 0),
+  complete: round1Score !== null && round2Score !== null
+};
     }).filter((row) => row.round1Score !== null || row.round2Score !== null);
     rows.sort((a, b) => b.total - a.total || a.teamNumber - b.teamNumber);
     return res.json({ results: rows.map((row, index) => ({ ...row, rank: index + 1 })) });

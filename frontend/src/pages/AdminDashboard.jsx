@@ -641,10 +641,51 @@ const deleteQuestion = async (question) => {
 
     {tab === 'Round 1 Results' && <Results rows={data.round1} title="Round 1 Results" />}
     {tab === 'Round 2 Results' && <Results rows={data.round2} title="Round 2 Results" />}
-    {tab === 'Combined Results' && <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">Combined Results</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th><th className="p-4">Round 2</th><th className="p-4">Total</th></tr></thead><tbody>{data.combined.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ') || '—'}</td><td className="p-4">{row.round1Score ?? '—'}</td><td className="p-4">{row.round2Score ?? '—'}</td><td className="p-4 font-mono font-bold">{row.total}</td></tr>)}</tbody></table></section>}
+    {tab === 'Combined Results' && <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">Combined Results</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th>
+<th className="p-4">R1 Time</th>
+<th className="p-4">Round 2</th>
+<th className="p-4">R2 Time</th>
+<th className="p-4">Total</th>
+<th className="p-4">Total Time</th></tr></thead><tbody>{data.combined.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ') || '—'}</td><td className="p-4">{row.round1Score ?? '—'}</td>
+
+<td className="p-4 font-mono">
+  {row.round1Time != null
+    ? `${Math.floor(row.round1Time / 60)}m ${row.round1Time % 60}s`
+    : '—'}
+</td>
+
+<td className="p-4">{row.round2Score ?? '—'}</td>
+
+<td className="p-4 font-mono">
+  {row.round2Time != null
+    ? `${Math.floor(row.round2Time / 60)}m ${row.round2Time % 60}s`
+    : '—'}
+</td>
+
+<td className="p-4 font-mono font-bold">{row.total}</td>
+
+<td className="p-4 font-mono font-bold">
+  {row.totalTime != null
+    ? `${Math.floor(row.totalTime / 60)}m ${row.totalTime % 60}s`
+    : '—'}
+</td></tr>)}</tbody></table></section>}
     <div className="mt-5 text-sm text-slate-400"><Link to="/round1" className="hover:text-white">View participant site →</Link></div>
   </div>;
 }
 function Stat({ label, value }) { return <div className="card p-4"><div className="text-xs uppercase text-slate-400">{label}</div><div className="mt-1 font-mono text-3xl font-bold text-white">{value}</div></div>; }
 function Status({ attempt }) { return !attempt ? <span className="text-slate-500">Not started</span> : <span>{attempt.status === 'submitted' ? `Submitted · ${attempt.score}` : 'In progress'}</span>; }
-function Results({ rows, title }) { return <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">{title}</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Score</th><th className="p-4">Status</th><th className="p-4">Submitted</th></tr></thead><tbody>{rows.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ')}</td><td className="p-4 font-mono">{row.score}</td><td className="p-4">{row.submissionType || 'submitted'}</td><td className="p-4">{time(row.submittedAt)}</td></tr>)}</tbody></table></section>; }
+function Results({ rows, title }) { return <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">{title}</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Score</th>
+<th className="p-4">Time Taken</th>
+<th className="p-4">Status</th>
+<th className="p-4">Time Taken</th></tr></thead><tbody>{rows.map((row) => <tr key={row.teamNumber} className="border-t border-slate-800"><td className="p-4">{row.rank}</td><td className="p-4 font-mono">{String(row.teamNumber).padStart(2, '0')}</td><td className="p-4">{row.participants.join(' · ')}</td><td className="p-4 font-mono">{row.score}</td>
+<td className="p-4 font-mono">
+  {row.timeTakenSeconds != null
+    ? `${Math.floor(row.timeTakenSeconds / 60)}m ${row.timeTakenSeconds % 60}s`
+    : '—'}
+</td>
+<td className="p-4">{row.submissionType || 'submitted'}</td>
+<td className="p-4 font-mono">
+  {row.timeTakenSeconds != null
+    ? `${Math.floor(row.timeTakenSeconds / 60)}m ${row.timeTakenSeconds % 60}s`
+    : '—'}
+</td></tr>)}</tbody></table></section>; }
