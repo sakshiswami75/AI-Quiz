@@ -1,5 +1,4 @@
-const BASE = '/api';
-
+const BASE = `${import.meta.env.VITE_API_URL}/api`;
 const TOKEN_KEYS = {
   team: 'qc_team_token',
   admin: 'qc_admin_token',
