@@ -17,7 +17,7 @@ export default function Home() {
           </span>
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
             The <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">AI Quiz</span>
-            <br />T
+            <br />Time
           </h1>
           <p className="mt-5 max-w-md text-lg text-slate-300">
             20 teams. One stage. A head-to-head battle across AI tools, cloud, security and the
