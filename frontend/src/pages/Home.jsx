@@ -17,10 +17,10 @@ export default function Home() {
           </span>
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
             The <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">AI Quiz</span>
-            <br />Arena
+            <br />T
           </h1>
           <p className="mt-5 max-w-md text-lg text-slate-300">
-            16 teams. One stage. A head-to-head battle across AI tools, cloud, security and the
+            20 teams. One stage. A head-to-head battle across AI tools, cloud, security and the
             technology shaping tomorrow.
           </p>
 
@@ -35,7 +35,7 @@ export default function Home() {
 
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-4">
             {[
-              ['16', 'Teams'],
+              ['20', 'Teams'],
               ['30', 'MCQs'],
               ['1', 'Mark each'],
             ].map(([n, l]) => (

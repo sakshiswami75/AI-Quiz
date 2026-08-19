@@ -19,7 +19,7 @@ export default function Logo({ size = 'md', subtitle = true }) {
       </div>
       <div className="leading-tight">
         <div className={`${title} font-extrabold tracking-tight text-white`}>
-          AI Quiz <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">Arena</span>
+          AI Quiz <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">Time</span>
         </div>
         {subtitle && <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">College Tech Competition</div>}
       </div>

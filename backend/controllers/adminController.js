@@ -3,7 +3,7 @@ const Attempt = require('../models/Attempt');
 const Question = require('../models/Question');
 const { scoreAttempt } = require('../utils/scoring');
 
-const TOTAL_TEAMS = Number(process.env.TOTAL_TEAMS) || 16;
+const TOTAL_TEAMS = Number(process.env.TOTAL_TEAMS) || 20;
 
 // GET /api/admin/overview
 exports.overview = async (req, res, next) => {

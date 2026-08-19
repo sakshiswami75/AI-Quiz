@@ -18,7 +18,7 @@ export default function PageShell({ children, footer = true }) {
 
       {footer && (
         <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-          AI Quiz Arena · College Tech Competition · Phase 1 Demo
+          AI Quiz Time · College Tech Competition · Phase 1 Demo
         </footer>
       )}
     </div>

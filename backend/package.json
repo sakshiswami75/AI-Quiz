@@ -1,5 +1,5 @@
 {
-  "name": "ai-quiz-arena-backend",
+  "name": "ai-quiz-time-backend",
   "version": "1.0.0",
   "description": "AI Quiz Competition Platform - Backend (Phase 1)",
   "main": "server.js",

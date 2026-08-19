@@ -34,7 +34,7 @@ const { round1Questions, round2Questions } = require('./utils/seedData');
     }
 
     // Predefined teams. Existing records and attempts are never deleted here.
-    const totalTeams = Number(process.env.TOTAL_TEAMS) || 16;
+    const totalTeams = Number(process.env.TOTAL_TEAMS) || 20;
     await Promise.all(Array.from({ length: totalTeams }, (_, i) =>
       Team.updateOne({ teamNumber: i + 1 }, { $setOnInsert: { teamNumber: i + 1 } }, { upsert: true })
     ));

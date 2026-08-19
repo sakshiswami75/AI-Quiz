@@ -1,7 +1,7 @@
 const Team = require('../models/Team');
 const { signTeam } = require('../middleware/auth');
 
-const TOTAL_TEAMS = Number(process.env.TOTAL_TEAMS) || 16;
+const TOTAL_TEAMS = Number(process.env.TOTAL_TEAMS) || 20;
 
 // GET /api/teams/availability -> predefined teams available for event entry
 exports.availability = async (req, res, next) => {

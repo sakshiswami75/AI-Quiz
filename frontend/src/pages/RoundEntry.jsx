@@ -56,7 +56,7 @@ export default function RoundEntry({ round }) {
     <PageShell>
       <div className="mx-auto max-w-lg">
         <div className="mb-7 text-center">
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">AI Quiz Arena</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">AI Quiz Time</div>
           <h1 className="mt-2 text-3xl font-extrabold text-white">Round {round}</h1>
           <p className="mt-2 text-slate-400">
             {round === 1 ? 'Select your predefined team and enter both participant names.' : 'Verify the same participant names used in Round 1.'}
