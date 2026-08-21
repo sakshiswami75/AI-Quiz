@@ -206,6 +206,84 @@ const deleteQuestion = async (question) => {
     try { await api.adminForceSubmit(attempt.attemptId); await load(); } catch (err) { setError(err.message); }
   };
 
+  const downloadCSV = (rows, filename, type) => {
+  let headers;
+  let dataRows;
+
+  if (type === 'combined') {
+    headers = [
+      'Rank',
+      'Team',
+      'Participants',
+      'Round 1 Score',
+      'Round 1 Time',
+      'Round 2 Score',
+      'Round 2 Time',
+      'Total Score',
+      'Total Time',
+    ];
+
+    dataRows = rows.map((row) => [
+      row.rank,
+      row.teamNumber,
+      row.participants?.join(' · ') || '',
+      row.round1Score ?? '',
+      row.round1Time != null
+        ? `${Math.floor(row.round1Time / 60)}m ${row.round1Time % 60}s`
+        : '',
+      row.round2Score ?? '',
+      row.round2Time != null
+        ? `${Math.floor(row.round2Time / 60)}m ${row.round2Time % 60}s`
+        : '',
+      row.total ?? '',
+      row.totalTime != null
+        ? `${Math.floor(row.totalTime / 60)}m ${row.totalTime % 60}s`
+        : '',
+    ]);
+  } else {
+    headers = [
+      'Rank',
+      'Team',
+      'Participants',
+      'Score',
+      'Time Taken',
+      'Submission Type',
+    ];
+
+    dataRows = rows.map((row) => [
+      row.rank,
+      row.teamNumber,
+      row.participants?.join(' · ') || '',
+      row.score ?? '',
+      row.timeTakenSeconds != null
+        ? `${Math.floor(row.timeTakenSeconds / 60)}m ${row.timeTakenSeconds % 60}s`
+        : '',
+      row.submissionType || 'submitted',
+    ]);
+  }
+
+  const escapeCSV = (value) =>
+    `"${String(value).replace(/"/g, '""')}"`;
+
+  const csv = [
+    headers.map(escapeCSV).join(','),
+    ...dataRows.map((row) => row.map(escapeCSV).join(',')),
+  ].join('\n');
+
+  const blob = new Blob([csv], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+};
+
   if (loading) return <Spinner full label="Loading dashboard…" />;
   const overview = data.overview || {};
   return <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
@@ -639,9 +717,51 @@ const deleteQuestion = async (question) => {
   </section>
 )}
 
-    {tab === 'Round 1 Results' && <Results rows={data.round1} title="Round 1 Results" />}
-    {tab === 'Round 2 Results' && <Results rows={data.round2} title="Round 2 Results" />}
-    {tab === 'Combined Results' && <section className="card mt-4 overflow-x-auto"><h2 className="p-5 font-semibold text-white">Combined Results</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th>
+{tab === 'Round 1 Results' && (
+  <>
+    <div className="mt-4 flex justify-end">
+      <button
+        onClick={() => downloadCSV(data.round1, 'round-1-results.csv', 'round')}
+        className="btn-primary text-sm"
+      >
+        Download CSV
+      </button>
+    </div>
+    <Results rows={data.round1} title="Round 1 Results" />
+  </>
+)}
+
+{tab === 'Round 2 Results' && (
+  <>
+    <div className="mt-4 flex justify-end">
+      <button
+        onClick={() => downloadCSV(data.round2, 'round-2-results.csv', 'round')}
+        className="btn-primary text-sm"
+      >
+        Download CSV
+      </button>
+    </div>
+    <Results rows={data.round2} title="Round 2 Results" />
+  </>
+)}
+    {tab === 'Combined Results' && <section className="card mt-4 overflow-x-auto">
+  <div className="flex items-center justify-between p-5">
+    <h2 className="font-semibold text-white">Combined Results</h2>
+
+    <button
+      onClick={() =>
+        downloadCSV(
+          data.combined,
+          'combined-results.csv',
+          'combined'
+        )
+      }
+      className="btn-primary text-sm"
+    >
+      Download CSV
+    </button>
+  </div>
+  <h2 className="p-5 font-semibold text-white">Combined Results</h2><table className="w-full text-sm"><thead><tr className="text-left text-xs uppercase text-slate-500"><th className="p-4">Rank</th><th className="p-4">Team</th><th className="p-4">Participants</th><th className="p-4">Round 1</th>
 <th className="p-4">R1 Time</th>
 <th className="p-4">Round 2</th>
 <th className="p-4">R2 Time</th>
